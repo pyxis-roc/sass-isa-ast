@@ -1,0 +1,8 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: sass-isa-ast
+Upstream-Contact: Benjamin Valpey <bavalpey@gmail.com>
+Source: https://github.com/pyxis-roc/sass-isa-ast
+
+Files: CITATION.cff
+Copyright: 2024 University of Rochester
+License: MIT
