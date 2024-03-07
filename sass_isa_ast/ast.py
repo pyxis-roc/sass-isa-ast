@@ -4,17 +4,17 @@
 #
 # SPDX-License-Identifier: MIT
 
-# Author:       Benjamin Valpey
-# Date:         14 Oct 2020
-# Filename:     sass_ast.py
-# Last Edited:  Thu 22 Feb 2024 01:54:06 PM EST
-# Description:  Contains classes for AST in SASS
+__author__ = "Benjamin Valpey"
+__date__ = "Tue 05 Mar 2024 01:44:32 PM EST"
+__license__ = "LGPL-3.0-or-later"
+__copyright__ = "2020-2024 University of Rochester"
 
-from typing import Union, Optional
 import re
+import typing as _typ
 
 
 class Register(object):
+    """SASS Register, e.g. R1 R2 R3."""
     def __init__(self, symbol: str, regType=None):
         if regType is not None:
             self.type: str = regType
@@ -35,6 +35,7 @@ class Register(object):
         self.v: str = symbol.split(".")[0]
 
     def __str__(self):
+        """Return a string representation of the Register object."""
         return self.v
 
     def __eq__(self, other):
@@ -49,7 +50,7 @@ class Register(object):
 
 class CC_Register(Register):
     def __init__(self, symbol: str):
-        self.condition: Optional[str]
+        self.condition: _typ.Optional[str]
         args = symbol.split(".")
         self.v = args[0]
         if len(args) > 1:
@@ -98,8 +99,8 @@ class HexImmediate(object):
 
 class RegAddress(object):
     def __init__(self, text):
-        self.offset: Optional[Union[HexImmediate, UnaryOp]]
-        self.base: Union[Register, HexImmediate]
+        self.offset: _typ.Optional[_typ.Union[HexImmediate, UnaryOp]]
+        self.base: _typ.Union[Register, HexImmediate]
         noBracket = text.replace("[", "").replace("]", "")
         if "+" in noBracket:
             base = argument_to_object(noBracket[: noBracket.find("+")])
@@ -151,8 +152,8 @@ class BranchLabel(object):
 
 
 class Branch(object):
-    def __init__(self, text: str, dest: Union[str, HexImmediate]):
-        self.dest: Union[str, HexImmediate] = dest
+    def __init__(self, text: str, dest: _typ.Union[str, HexImmediate]):
+        self.dest: _typ.Union[str, HexImmediate] = dest
         self.text: str = text
 
 
@@ -183,7 +184,7 @@ class Instruction(object):
 
 
 class Statement(object):
-    def __init__(self, label, text, instr: Optional[Instruction] = None):
+    def __init__(self, label, text, instr: _typ.Optional[Instruction] = None):
         # remove any commas from different representations
         text = text.replace("] [", "][")
         self.label: str = label
@@ -215,8 +216,7 @@ class Barrier:
 
 
 class UnaryOp(object):
-    """
-    Unary ops do not allow nested operations.  negation of absval is treated as a single op
+    """Unary ops do not allow nested operations.  negation of absval is treated as a single op
     """
 
     def __init__(self, op: str, text: str):
