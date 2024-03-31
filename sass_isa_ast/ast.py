@@ -11,44 +11,97 @@ __copyright__ = "2020-2024 University of Rochester"
 
 import re
 import typing as _typ
+from collections import defaultdict as _defaultdict
+
+__all__ = [
+    "Register",
+    "CC_Register",
+    "HexImmediate",
+    "RegAddress",
+    "ConstantAccess",
+    "PredicateRegister",
+    "BranchLabel",
+    "Branch",
+    "Instruction",
+    "Statement",
+    "Barrier",
+    "UnaryOp",
+    "FloatImmediate",
+    "DecImmediate",
+    "SReg",
+    "NamedDependencyBarrier",
+    "Simulator_function_name",
+    "TextureDimensionOperand",
+    "TextureComponentOperand",
+    "argument_to_object",
+]
+
+from abc import ABC as _ABC, abstractmethod as _abstractmethod
+
+# ruff: noqa: D107, D101, D105
+
+_REGISTER_PATTERN = re.compile(r"((?<=\.)((?P<selector>H[01]|B[0-3]|64)|(?P<CC>CC)))(.reuse)?$")
 
 
-class Register(object):
+class Reg(_ABC):
+    """Abstract base class for a register or predicate register."""
+
+    @property
+    @_abstractmethod
+    def v(self) -> str:
+        """Return the string representation of the term."""
+        pass
+
+    @property
+    @_abstractmethod
+    def num(self) -> int:
+        """Return the register or predicate register num.
+
+        -1 should resolve to the constant register, RZ for Registers and PT for PredicateRegisters.
+        """
+
+
+class Register(Reg):
     """SASS Register, e.g. R1 R2 R3."""
+
+    selector: str | None
+    CC: bool | None
+
     def __init__(self, symbol: str, regType=None):
-        if regType is not None:
-            self.type: str = regType
-        if ".H1" in symbol:
-            self.selector = "H1"
-        elif ".B0" in symbol:
-            self.selector = "B0"
-        elif ".B1" in symbol:
-            self.selector = "B1"
-        elif ".B2" in symbol:
-            self.selector = "B2"
-        elif "B3" in symbol:
-            self.selector = "B3"
-        elif ".64" in symbol:
-            self.selector = "64"
-        self.CC = ".CC" in symbol
-        self.reuse = ".reuse" in symbol
-        self.v: str = symbol.split(".")[0]
+        """Initialize a Register object."""
+        self._v = symbol.split(".")[0]
+
+        matches = m.groupdict() if (m := _REGISTER_PATTERN.search(symbol)) is not None else {}
+        self.selector = matches.get("selector")
+        self.CC = bool(matches.get("CC"))
+        self.reuse = bool(matches.get("reuse"))
+        self._num = -1 if self._v == "RZ" else int(self._v[1:])
+
+    @property
+    def num(self):
+        """Return the register number, or -1 if RZ."""
+        return self._num
+
+    @property
+    def v(self) -> str | int:
+        """Return the register value."""
+        return self._v
 
     def __str__(self):
         """Return a string representation of the Register object."""
         return self.v
 
     def __eq__(self, other):
-        return isinstance(other, Register) and self.v == other.v
+        return isinstance(other, Register) and (self.v, self.selector, self.CC) == (other.v, other.selector, other.CC)
 
     def __ne__(self, other):
         return not (self == other)
 
     def __hash__(self):
-        return hash(self.v)
+        return hash((self.v, self.selector, self.CC))
 
 
-class CC_Register(Register):
+class CC_Register:
     def __init__(self, symbol: str):
         self.condition: _typ.Optional[str]
         args = symbol.split(".")
@@ -71,33 +124,14 @@ class CC_Register(Register):
         return hash(self.v)
 
 
-class HexImmediate(object):
+class HexImmediate:
     def __init__(self, text):
         self.text = text
-
-    def to_smt(self, width: int) -> str:
-        if width not in {32, 16, 64}:
-            raise ValueError
-        """
-        Converts this immmediate to smt format, given the desired width (in bits)
-        """
-        val: str = self.text.lstrip("0x")
-        if width == 32:
-            missing_zeros: int = 8 - len(val)
-            val: str = "#x" + "0" * missing_zeros + val
-        elif width == 16:
-            missing_zeros: int = 4 - len(val)
-            val: str = "#x" + "0" * missing_zeros + val
-        elif width == 64:
-            missing_zeros: int = 16 - len(val)
-            val: str = "#x" + "0" * missing_zeros + val
-        return val
-
     def __str__(self):
         return self.text
 
 
-class RegAddress(object):
+class RegAddress():
     def __init__(self, text):
         self.offset: _typ.Optional[_typ.Union[HexImmediate, UnaryOp]]
         self.base: _typ.Union[Register, HexImmediate]
@@ -105,12 +139,16 @@ class RegAddress(object):
         if "+" in noBracket:
             base = argument_to_object(noBracket[: noBracket.find("+")])
             offset = argument_to_object(noBracket[noBracket.find("+") + 1 :])
-            assert isinstance(offset, HexImmediate) or (isinstance(offset, UnaryOp) and isinstance(offset.argument, HexImmediate)), "offset of RegAddress must be a HexImmediate or UnaryOp on HexImmediate"
+            assert isinstance(offset, HexImmediate) or (
+                isinstance(offset, UnaryOp) and isinstance(offset.argument, HexImmediate)
+            ), "offset of RegAddress must be a HexImmediate or UnaryOp on HexImmediate"
             self.offset = offset
         else:
             self.offset = None
             base = argument_to_object(noBracket)
-        assert isinstance(base, Register) or isinstance(base, HexImmediate), f"Base of RegAddress must be a Register or HexImmediate, have {type(base).__name__}"
+        assert isinstance(base, Register) or isinstance(
+            base, HexImmediate
+        ), f"Base of RegAddress must be a Register or HexImmediate, have {type(base).__name__}"
         self.base = base
         self.text = text.replace("[", "").replace("]", "")
 
@@ -118,17 +156,28 @@ class RegAddress(object):
         return self.text
 
 
-class ConstantAccess(object):
+class ConstantAccess():
     def __init__(self, bank: HexImmediate, offset: RegAddress, selector: str):
         self.bank: HexImmediate = bank
         self.offset: RegAddress = offset
         self.selector: str = selector
 
 
-class PredicateRegister(object):
+class PredicateRegister(Reg):
     def __init__(self, v):
         self.v: str = v
         self.type: str = "Bool"
+        self._num = -1 if self.v == "PT" else int(self.v[1:])
+    
+    @property
+    def num(self):
+        """Return the register number, or -1 if PT."""
+        return self._num
+    
+    @property
+    def v(self) -> str:
+        """Return the register value."""
+        return self._v
 
     def __str__(self):
         return self.v
@@ -143,7 +192,7 @@ class PredicateRegister(object):
         return hash(self.v)
 
 
-class BranchLabel(object):
+class BranchLabel():
     def __init__(self, text):
         self.text = text
 
@@ -151,13 +200,13 @@ class BranchLabel(object):
         return self.text
 
 
-class Branch(object):
+class Branch():
     def __init__(self, text: str, dest: _typ.Union[str, HexImmediate]):
         self.dest: _typ.Union[str, HexImmediate] = dest
         self.text: str = text
 
 
-class Instruction(object):
+class Instruction():
     def __init__(self, text: str):
         text = text.replace("] [", "][")
         if "@" in text:
@@ -167,9 +216,7 @@ class Instruction(object):
         try:
             text = text.replace(", ", " ")
             text = re.sub(r"\s{2,}", " ", text)
-            self.sass_instruction: str = (
-                text.replace(", ", " ").split()[0].replace(" ", "")
-            )
+            self.sass_instruction: str = text.replace(", ", " ").split()[0].replace(" ", "")
         except IndexError:
             print(text)
             raise
@@ -183,7 +230,7 @@ class Instruction(object):
         return self.text
 
 
-class Statement(object):
+class Statement():
     def __init__(self, label, text, instr: _typ.Optional[Instruction] = None):
         # remove any commas from different representations
         text = text.replace("] [", "][")
@@ -194,11 +241,7 @@ class Statement(object):
         self.inverted: bool = "@!" in text
         try:
             self.predReg = (
-                PredicateRegister(
-                    text.replace(", ", " ").split()[0][2 if self.inverted else 1 :]
-                )
-                if self.predicated
-                else None
+                PredicateRegister(text.replace(", ", " ").split()[0][2 if self.inverted else 1 :]) if self.predicated else None
             )
         except:
             raise ValueError("Unable to parse: " + str(text))
@@ -215,8 +258,14 @@ class Barrier:
         self.text: str = text
 
 
-class UnaryOp(object):
-    """Unary ops do not allow nested operations.  negation of absval is treated as a single op
+class UnaryOp():
+    """Unary operation on a term. !, ~, -, |, -|.
+
+    ! = logical not
+    ~ = bitwise not
+    - = negation
+    | = absolute value
+    -| = negation of absolute value
     """
 
     def __init__(self, op: str, text: str):
@@ -299,9 +348,7 @@ def argument_to_object(
     arg = arg.replace(".reuse", "")
     named_depbar_pattern = re.compile(r"^SB\d+")
     sreg_pattern = re.compile(r"^SR_\w+")
-    address_pattern = re.compile(
-        r"^\[(0x[0-9a-f]+|RZ|R\d+(\.64)?)(\+-?0x[0-9a-f]+|R\d+)?\]$"
-    )
+    address_pattern = re.compile(r"^\[(0x[0-9a-f]+|RZ|R\d+(\.64)?)(\+-?0x[0-9a-f]+|R\d+)?\]$")
     const_mem_pattern = re.compile(r"^c\[([^]]+)]\s*(\[[^]]+\])\.?(H1|B0|B1|B2|B3)?")
     float_pattern = re.compile(r"\d+\.NEG|\d+\.\d+e-?\d+(\.NEG)?$|^[+-]INF$|^\+QNAN$")
     dec_pattern = re.compile(r"(?<!R|#|P)\b\d+$")

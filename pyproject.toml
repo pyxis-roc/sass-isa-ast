@@ -4,7 +4,7 @@
 
 [tool.poetry]
 name = "sass-isa-ast"
-version = "1.0.0"
+version = "1.0.1"
 description = "A library for parsing the Abstract Syntax Tree (AST) of NVIDIA's SASS ISA."
 authors = ["Benjamin Valpey <bavalpey@users.noreply.github.com>"]
 readme = "README.md"
