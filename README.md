@@ -28,9 +28,12 @@ from sass_isa_ast import ast as sass_ast
 label, text = ...
 stmt = sass_ast.Statement(addr, sass_line)
 
+# After conversion to an AST, the instruction, operands, and predicate
+# guard are accessible as members on the statement object.
+
 # Access the underlying instruction
 instr = stmt.instruction
-# Access the instruction's operands
+# Access the instruction's operands (as a list)
 operands = stmt.instruction.arguments
 # Check the predicate guard
 is_predicated = stmt.instruction.predicated
