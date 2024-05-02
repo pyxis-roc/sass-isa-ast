@@ -33,7 +33,7 @@ __all__ = [
     "Simulator_function_name",
     "TextureDimensionOperand",
     "TextureComponentOperand",
-    "argument_to_object",
+    "parse_term",
 ]
 
 from abc import ABC as _ABC, abstractmethod as _abstractmethod
@@ -137,15 +137,15 @@ class RegAddress():
         self.base: _typ.Union[Register, HexImmediate]
         noBracket = text.replace("[", "").replace("]", "")
         if "+" in noBracket:
-            base = argument_to_object(noBracket[: noBracket.find("+")])
-            offset = argument_to_object(noBracket[noBracket.find("+") + 1 :])
+            base = parse_term(noBracket[: noBracket.find("+")])
+            offset = parse_term(noBracket[noBracket.find("+") + 1 :])
             assert isinstance(offset, HexImmediate) or (
                 isinstance(offset, UnaryOp) and isinstance(offset.argument, HexImmediate)
             ), "offset of RegAddress must be a HexImmediate or UnaryOp on HexImmediate"
             self.offset = offset
         else:
             self.offset = None
-            base = argument_to_object(noBracket)
+            base = parse_term(noBracket)
         assert isinstance(base, Register) or isinstance(
             base, HexImmediate
         ), f"Base of RegAddress must be a Register or HexImmediate, have {type(base).__name__}"
@@ -221,7 +221,7 @@ class Instruction():
             print(text)
             raise
         for a in text.replace(", ", " ").split()[1:]:
-            self.arguments.append(argument_to_object(a))
+            self.arguments.append(parse_term(a))
         # It may not be the best idea to parse here, but I want this logic to be attached to the class
         if ".CC" in text or self.text == "IMNMX.XHI":
             self.sass_instruction += "CC"
@@ -272,7 +272,7 @@ class UnaryOp():
         if op not in ["|", "-", "!", "~", "-|"]:
             raise ValueError
         self.operation: str = op
-        self.argument = argument_to_object(text)
+        self.argument = parse_term(text)
         self.h1: bool = "H1" in text
 
     def __str__(self):
@@ -341,9 +341,17 @@ class TextureComponentOperand(object):
         return self.v
 
 
-def argument_to_object(
+def argument_to_object(arg: str):
+    """Deprecated. Use parse_term instead."""  # noqa: D401
+    return parse_operand(arg)
+
+def parse_operand(
     arg: str,
 ):
+    """Parse an operand into an AST term.
+
+    :param arg: The operand to parse.
+    """
     # get rid of .reuse.  It doesn't help us
     arg = arg.replace(".reuse", "")
     named_depbar_pattern = re.compile(r"^SB\d+")
@@ -378,8 +386,8 @@ def argument_to_object(
         return SReg(arg)
     elif cmatch is not None:
         return ConstantAccess(
-            argument_to_object(cmatch.group(1)),
-            argument_to_object(cmatch.group(2)),
+            parse_term(cmatch.group(1)),
+            parse_term(cmatch.group(2)),
             cmatch.group(3),
         )
     elif arg.count("|") == 2:
