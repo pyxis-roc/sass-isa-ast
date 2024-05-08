@@ -165,7 +165,7 @@ class ConstantAccess():
 
 class PredicateRegister(Reg):
     def __init__(self, v):
-        self.v: str = v
+        self._v: str = v
         self.type: str = "Bool"
         self._num = -1 if self.v == "PT" else int(self.v[1:])
     
